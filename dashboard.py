@@ -25,7 +25,23 @@ data['RSI'] = 100 - (100 / (1 + rs))
 # VWAP
 data['VWAP'] = (data['Volume'] * (data['High']+data['Low']+data['Close'])/3).cumsum() / data['Volume'].cumsum()
 
+data = data.dropna()
+
+if data.empty:
+    st.error("No data available")
+    st.stop()
+
 latest = data.iloc[-1]
+
+signal = "NO TRADE"
+
+try:
+    if latest['Close'] > latest['VWAP'] and latest['EMA9'] > latest['EMA21'] and latest['RSI'] > 55:
+        signal = "BUY CE 🚀"
+    elif latest['Close'] < latest['VWAP'] and latest['EMA9'] < latest['EMA21'] and latest['RSI'] < 45:
+        signal = "BUY PE 🔻"
+except:
+    signal = "NO TRADE"
 
 # Signal logic
 signal = "NO TRADE"
