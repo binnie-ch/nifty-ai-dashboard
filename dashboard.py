@@ -1,4 +1,4 @@
-import streamlit as st
+ import streamlit as st
 import pandas as pd
 import yfinance as yf
 import plotly.graph_objects as go
@@ -25,6 +25,7 @@ data['RSI'] = 100 - (100 / (1 + rs))
 # VWAP
 data['VWAP'] = (data['Volume'] * (data['High']+data['Low']+data['Close'])/3).cumsum() / data['Volume'].cumsum()
 
+# Clean data
 data = data.dropna()
 
 if data.empty:
@@ -33,17 +34,7 @@ if data.empty:
 
 latest = data.iloc[-1]
 
-signal = "NO TRADE"
-
-try:
-    if latest['Close'] > latest['VWAP'] and latest['EMA9'] > latest['EMA21'] and latest['RSI'] > 55:
-        signal = "BUY CE 🚀"
-    elif latest['Close'] < latest['VWAP'] and latest['EMA9'] < latest['EMA21'] and latest['RSI'] < 45:
-        signal = "BUY PE 🔻"
-except:
-    signal = "NO TRADE"
-
-# Signal logic
+# ✅ SINGLE signal logic
 signal = "NO TRADE"
 
 if latest['Close'] > latest['VWAP'] and latest['EMA9'] > latest['EMA21'] and latest['RSI'] > 55:
@@ -51,12 +42,22 @@ if latest['Close'] > latest['VWAP'] and latest['EMA9'] > latest['EMA21'] and lat
 elif latest['Close'] < latest['VWAP'] and latest['EMA9'] < latest['EMA21'] and latest['RSI'] < 45:
     signal = "BUY PE 🔻"
 
-# Telegram Alert Function
+# ✅ Telegram Alert Function (with debug)
 def send_alert(message):
-    bot_token = st.secrets["BOT_TOKEN"]
-    chat_id = st.secrets["CHAT_ID"]
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    requests.get(url, params={"chat_id": chat_id, "text": message})
+    try:
+        bot_token = st.secrets["BOT_TOKEN"]
+        chat_id = st.secrets["CHAT_ID"]
+
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        response = requests.get(url, params={"chat_id": chat_id, "text": message})
+
+        if response.status_code == 200:
+            st.success("✅ Alert sent to Telegram")
+        else:
+            st.error("❌ Telegram error")
+
+    except Exception as e:
+        st.error(f"Telegram Error: {e}")
 
 # Send alert only when signal changes
 if "last_signal" not in st.session_state:
@@ -65,6 +66,7 @@ if "last_signal" not in st.session_state:
 if signal != st.session_state.last_signal:
     if signal != "NO TRADE":
         send_alert(f"📊 NIFTY SIGNAL\n\n{signal}\nPrice: {round(latest['Close'],2)}")
+
     st.session_state.last_signal = signal
 
 # Layout
