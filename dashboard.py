@@ -108,6 +108,8 @@ with col2:
 
 # RSI Chart
 st.subheader("RSI Indicator")
+st.write("Data rows:", len(data))
+st.write(data.tail())
 
 fig2 = go.Figure()
 fig2.add_trace(go.Scatter(x=data.index, y=data['RSI'], name='RSI'))
