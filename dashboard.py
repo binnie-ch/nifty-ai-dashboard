@@ -34,7 +34,6 @@ data['RSI'] = 100 - (100 / (1 + rs))
 data['VWAP'] = (data['Volume'] * (data['High']+data['Low']+data['Close'])/3).cumsum() / data['Volume'].cumsum()
 
 # Clean data
-data = data.fillna(method='ffill')
 data = data.dropna()
 
 if data.empty:
