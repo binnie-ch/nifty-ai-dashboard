@@ -9,11 +9,27 @@ st.set_page_config(layout="wide")
 st.title("📊 Nifty AI Live Dashboard")
 
 # Fetch data (with fallback)
-data = yf.download("^NSEI", period="5d", interval="5m", progress=False)
 
-# If empty, try fallback interval
+import time
+
+def get_data():
+    for i in range(3):  # retry 3 times
+        try:
+            data = yf.download("^NSEI", period="7d", interval="15m", progress=False)
+            if not data.empty:
+                return data
+        except:
+            time.sleep(2)
+    return pd.DataFrame()
+
+data = get_data()
+
 if data.empty:
-    data = yf.download("^NSEI", period="5d", interval="15m", progress=False)
+    st.error("⚠️ Data not loading from Yahoo. Please refresh after some time.")
+    st.stop()
+# If empty, try fallback interval
+#if data.empty:
+#   data = yf.download("^NSEI", period="5d", interval="15m", progress=False)
 
 # If still empty → show error
 if data.empty:
