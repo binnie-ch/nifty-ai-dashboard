@@ -8,9 +8,17 @@ st.set_page_config(layout="wide")
 
 st.title("📊 Nifty AI Live Dashboard")
 
-# Fetch data
-data = yf.download("^NSEI", period="2d", interval="5m")
+# Fetch data (with fallback)
+data = yf.download("^NSEI", period="5d", interval="5m", progress=False)
 
+# If empty, try fallback interval
+if data.empty:
+    data = yf.download("^NSEI", period="5d", interval="15m", progress=False)
+
+# If still empty → show error
+if data.empty:
+    st.error("⚠️ Unable to fetch Nifty data. Try after some time.")
+    st.stop()
 # Indicators
 data['EMA9'] = data['Close'].ewm(span=9).mean()
 data['EMA21'] = data['Close'].ewm(span=21).mean()
@@ -26,6 +34,7 @@ data['RSI'] = 100 - (100 / (1 + rs))
 data['VWAP'] = (data['Volume'] * (data['High']+data['Low']+data['Close'])/3).cumsum() / data['Volume'].cumsum()
 
 # Clean data
+data = data.fillna(method='ffill')
 data = data.dropna()
 
 if data.empty:
