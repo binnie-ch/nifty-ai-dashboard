@@ -61,7 +61,7 @@ loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
 rs = gain / loss
 data['RSI'] = 100 - (100 / (1 + rs))
 
-latest = data.iloc[-1]
+latest = data.iloc[-1].to_dict()
 
 # -------------------------------
 # SIGNAL LOGIC
