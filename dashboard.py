@@ -2,20 +2,19 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 import plotly.graph_objects as go
-import requests
+import time
 
 st.set_page_config(layout="wide")
 
-st.title("📊 Nifty AI Live Dashboard")
+st.title("📊 Nifty AI Dashboard (Stable Version)")
 
-# Fetch data (with fallback)
-
-import time
-
+# -------------------------------
+# SAFE DATA FETCH FUNCTION
+# -------------------------------
 def get_data():
-    for i in range(3):  # retry 3 times
+    for i in range(3):
         try:
-            data = yf.download("^NSEI", period="7d", interval="15m", progress=False)
+            data = yf.download("NIFTYBEES.NS", period="7d", interval="15m", progress=False)
             if not data.empty:
                 return data
         except:
@@ -25,75 +24,41 @@ def get_data():
 data = get_data()
 
 if data.empty:
-    st.error("⚠️ Data not loading from Yahoo. Please refresh after some time.")
+    st.error("❌ Data not loading. Please refresh after some time.")
     st.stop()
-# If empty, try fallback interval
-#if data.empty:
-#   data = yf.download("^NSEI", period="5d", interval="15m", progress=False)
 
-# If still empty → show error
-if data.empty:
-    st.error("⚠️ Unable to fetch Nifty data. Try after some time.")
-    st.stop()
-# Indicators
+# -------------------------------
+# CLEAN DATA
+# -------------------------------
+data = data.fillna(method="ffill")
+
+# -------------------------------
+# INDICATORS
+# -------------------------------
 data['EMA9'] = data['Close'].ewm(span=9).mean()
 data['EMA21'] = data['Close'].ewm(span=21).mean()
 
-# RSI
 delta = data['Close'].diff()
 gain = (delta.where(delta > 0, 0)).rolling(14).mean()
 loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
 rs = gain / loss
 data['RSI'] = 100 - (100 / (1 + rs))
 
-# VWAP
-data['VWAP'] = (data['Volume'] * (data['High']+data['Low']+data['Close'])/3).cumsum() / data['Volume'].cumsum()
-
-# Clean data
-data = data.dropna()
-
-if data.empty:
-    st.error("No data available")
-    st.stop()
-
 latest = data.iloc[-1]
 
-# ✅ SINGLE signal logic
+# -------------------------------
+# SIGNAL LOGIC
+# -------------------------------
 signal = "NO TRADE"
 
-if latest['Close'] > latest['VWAP'] and latest['EMA9'] > latest['EMA21'] and latest['RSI'] > 55:
+if latest['EMA9'] > latest['EMA21'] and latest['RSI'] > 55:
     signal = "BUY CE 🚀"
-elif latest['Close'] < latest['VWAP'] and latest['EMA9'] < latest['EMA21'] and latest['RSI'] < 45:
+elif latest['EMA9'] < latest['EMA21'] and latest['RSI'] < 45:
     signal = "BUY PE 🔻"
 
-# ✅ Telegram Alert Function (with debug)
-def send_alert(message):
-    try:
-        bot_token = st.secrets["BOT_TOKEN"]
-        chat_id = st.secrets["CHAT_ID"]
-
-        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-        response = requests.get(url, params={"chat_id": chat_id, "text": message})
-
-        if response.status_code == 200:
-            st.success("✅ Alert sent to Telegram")
-        else:
-            st.error("❌ Telegram error")
-
-    except Exception as e:
-        st.error(f"Telegram Error: {e}")
-
-# Send alert only when signal changes
-if "last_signal" not in st.session_state:
-    st.session_state.last_signal = ""
-
-if signal != st.session_state.last_signal:
-    if signal != "NO TRADE":
-        send_alert(f"📊 NIFTY SIGNAL\n\n{signal}\nPrice: {round(latest['Close'],2)}")
-
-    st.session_state.last_signal = signal
-
-# Layout
+# -------------------------------
+# DISPLAY
+# -------------------------------
 col1, col2 = st.columns([3,1])
 
 with col1:
@@ -111,25 +76,7 @@ with col1:
     st.plotly_chart(fig, use_container_width=True)
 
 with col2:
-    st.metric("Nifty Price", round(latest['Close'],2))
+    st.metric("Price", round(latest['Close'],2))
     st.metric("Signal", signal)
 
-    entry = latest['Close']
-    sl = entry * 0.98
-    target = entry * 1.04
-
-    st.write(f"🎯 Entry: {entry:.2f}")
-    st.write(f"🛑 Stop Loss: {sl:.2f}")
-    st.write(f"💰 Target: {target:.2f}")
-
-# RSI Chart
-st.subheader("RSI Indicator")
-st.write("Data rows:", len(data))
-st.write(data.tail())
-
-fig2 = go.Figure()
-fig2.add_trace(go.Scatter(x=data.index, y=data['RSI'], name='RSI'))
-fig2.add_hline(y=70)
-fig2.add_hline(y=30)
-
-st.plotly_chart(fig2, use_container_width=True)
+st.write("Rows loaded:", len(data))
