@@ -30,7 +30,24 @@ if data.empty:
 # -------------------------------
 # CLEAN DATA
 # -------------------------------
-data = data.fillna(method="ffill")
+# Ensure data is valid
+if not isinstance(data, pd.DataFrame):
+    st.error("❌ Data format error")
+    st.stop()
+
+if data is None or data.empty:
+    st.error("❌ No data received from server")
+    st.stop()
+
+# Clean safely
+data = data.copy()
+
+if 'Close' not in data.columns:
+    st.error("❌ Invalid data structure")
+    st.stop()
+
+data = data.ffill()
+data = data.dropna()
 
 # -------------------------------
 # INDICATORS
