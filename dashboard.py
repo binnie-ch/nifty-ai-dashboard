@@ -8,20 +8,39 @@ def generate_signal(data):
 
     latest = data.iloc[-1].squeeze()
 
-    ema9 = latest.get('EMA9', 0)
-    ema21 = latest.get('EMA21', 0)
-    rsi = latest.get('RSI', 0)
-    close = latest.get('Close', 0)
-    vwap = latest.get('VWAP', 0)
-    volume = latest.get('Volume', 0)
+ema9 = latest['EMA9']
+ema21 = latest['EMA21']
+rsi = latest['RSI']
+close = latest['Close']
+vwap = latest['VWAP']
+volume = latest['Volume']
 
-    # Convert safely
-    ema9 = float(ema9)
-    ema21 = float(ema21)
-    rsi = float(rsi)
-    close = float(close)
-    vwap = float(vwap)
-    volume = float(volume)
+# Convert Series to scalar safely
+if hasattr(ema9, "iloc"):
+    ema9 = ema9.iloc[0]
+
+if hasattr(ema21, "iloc"):
+    ema21 = ema21.iloc[0]
+
+if hasattr(rsi, "iloc"):
+    rsi = rsi.iloc[0]
+
+if hasattr(close, "iloc"):
+    close = close.iloc[0]
+
+if hasattr(vwap, "iloc"):
+    vwap = vwap.iloc[0]
+
+if hasattr(volume, "iloc"):
+    volume = volume.iloc[0]
+
+# Final float conversion
+ema9 = float(ema9)
+ema21 = float(ema21)
+rsi = float(rsi)
+close = float(close)
+vwap = float(vwap)
+volume = float(volume)
 
     score = 0
 
@@ -90,6 +109,8 @@ data = yf.download(
 if data.empty:
     st.error("No data found")
     st.stop()
+    
+data.columns = [col[0] if isinstance(col, tuple) else col for col in data.columns]
 
 # Indicators
 data['EMA9'] = data['Close'].ewm(span=9).mean()
