@@ -143,19 +143,31 @@ def ai_engine(market, chain):
     score += flow_bias
 
     signal = "BUY" if score > 20 else "SELL" if score < -20 else "HOLD"
+    direction = option_direction(signal)
     win_prob = min(95, max(50, 50 + abs(score)))
 
     return signal, score, win_prob, pcr_val, max_pain_val, flow, oi_pressure
 
-
+def option_direction(signal):
+    if signal == "BUY":
+        return "CE (CALL BUY)"
+    elif signal == "SELL":
+        return "PE (PUT BUY)"
+    else:
+        return "NO TRADE"
+        
 # -----------------------------
 # TELEGRAM MESSAGE
 # -----------------------------
 def format_msg(index, signal, market, score, prob, pcr_val, max_pain_val, flow, oi_pressure):
+    direction = option_direction(signal)
+
     return f"""
 🚨 AI {index} SMART MONEY SIGNAL
 
 📊 Signal: {signal}
+📌 Options Action: {direction}
+
 📊 Price: {round(market['price'],2)}
 
 🧠 AI Score: {score}
@@ -172,7 +184,7 @@ def format_msg(index, signal, market, score, prob, pcr_val, max_pain_val, flow, 
 📉 RSI: {market['rsi']}
 🚀 ORB: {market['orb']}
 
-⚡ Institutional Tracking Enabled
+⚡ CE/PE Strategy Enabled
 """
 
 
@@ -218,6 +230,6 @@ with tab1:
 with tab2:
     run("SENSEX")
 
-
+st.success(f"Options Signal: {option_direction(signal)}")
 time.sleep(60)
 st.rerun()
