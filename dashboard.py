@@ -6,45 +6,45 @@ import plotly.graph_objects as go
 #from strategy import generate_signal
 def generate_signal(data):
 
-    latest = data.iloc[-1].squeeze()
+    latest = data.iloc[-1]
 
-ema9 = latest['EMA9']
-ema21 = latest['EMA21']
-rsi = latest['RSI']
-close = latest['Close']
-vwap = latest['VWAP']
-volume = latest['Volume']
+    ema9 = latest['EMA9']
+    ema21 = latest['EMA21']
+    rsi = latest['RSI']
+    close = latest['Close']
+    vwap = latest['VWAP']
+    volume = latest['Volume']
 
-# Convert Series to scalar safely
-if hasattr(ema9, "iloc"):
-    ema9 = ema9.iloc[0]
+    # Handle Series issue
+    if hasattr(ema9, "iloc"):
+        ema9 = ema9.iloc[0]
 
-if hasattr(ema21, "iloc"):
-    ema21 = ema21.iloc[0]
+    if hasattr(ema21, "iloc"):
+        ema21 = ema21.iloc[0]
 
-if hasattr(rsi, "iloc"):
-    rsi = rsi.iloc[0]
+    if hasattr(rsi, "iloc"):
+        rsi = rsi.iloc[0]
 
-if hasattr(close, "iloc"):
-    close = close.iloc[0]
+    if hasattr(close, "iloc"):
+        close = close.iloc[0]
 
-if hasattr(vwap, "iloc"):
-    vwap = vwap.iloc[0]
+    if hasattr(vwap, "iloc"):
+        vwap = vwap.iloc[0]
 
-if hasattr(volume, "iloc"):
-    volume = volume.iloc[0]
+    if hasattr(volume, "iloc"):
+        volume = volume.iloc[0]
 
-# Final float conversion
-ema9 = float(ema9)
-ema21 = float(ema21)
-rsi = float(rsi)
-close = float(close)
-vwap = float(vwap)
-volume = float(volume)
+    # Convert to float
+    ema9 = float(ema9)
+    ema21 = float(ema21)
+    rsi = float(rsi)
+    close = float(close)
+    vwap = float(vwap)
+    volume = float(volume)
 
     score = 0
 
-    # EMA
+    # EMA Trend
     if ema9 > ema21:
         score += 30
     else:
@@ -53,12 +53,14 @@ volume = float(volume)
     # RSI
     if rsi > 60:
         score += 25
+
     elif rsi < 40:
         score -= 25
 
     # VWAP
     if close > vwap:
         score += 20
+
     else:
         score -= 20
 
