@@ -67,8 +67,10 @@ def calculate_sl(price, signal, market):
 
     if signal == "BUY":
         sl = price * (1 - volatility)
+
     elif signal == "SELL":
         sl = price * (1 + volatility)
+
     else:
         sl = price
 
