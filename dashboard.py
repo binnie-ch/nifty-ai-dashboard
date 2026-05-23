@@ -215,6 +215,7 @@ def run(index):
     st.write("🎯 Max Pain:", max_pain_val)
 
     st.success(flow)
+    st.success(f"Options Signal: {option_direction(signal)}")
 
     # ALERT SYSTEM
     if signal != "HOLD" and signal != st.session_state.last_signal[index]:
@@ -229,7 +230,5 @@ with tab1:
 
 with tab2:
     run("SENSEX")
-
-st.success(f"Options Signal: {option_direction(signal)}")
 time.sleep(60)
 st.rerun()
