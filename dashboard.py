@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 import plotly.graph_objects as go
-
+from streamlit_autorefresh import st_autorefresh
 #from strategy import generate_signal
 def generate_signal(data):
 
