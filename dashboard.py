@@ -183,8 +183,6 @@ def format_msg(index, signal, market, score, prob, pcr_val, max_pain_val, flow, 
 
 📉 RSI: {market['rsi']}
 🚀 ORB: {market['orb']}
-
-⚡ CE/PE Strategy Enabled
 """
 
 
