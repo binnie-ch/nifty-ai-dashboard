@@ -9,8 +9,10 @@ import pytz
 # TELEGRAM CONFIG
 # =========================
 
-BOT_TOKEN = "8568497873:AAHEXglTw7nowIhX27AmPnKCs24ku6lF6gc"
-CHAT_ID = "8540013665"
+import os
+
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
 # =========================
 # SEND TELEGRAM ALERT
