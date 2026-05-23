@@ -95,7 +95,7 @@ st.set_page_config(layout="wide")
 
 st.title("🤖 AI Nifty/Sensex Trading Dashboard")
 # Auto refresh every 30 seconds
-st_autorefresh(interval=30000, key="marketrefresh")
+st_autorefresh(interval=15000, key="marketrefresh")
 
 symbol = st.selectbox(
     "Select Index",
