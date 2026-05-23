@@ -59,7 +59,27 @@ def market_status():
         return False, "⛔ Market Closed (Time Filter)"
     return True, "✅ Market Active"
 
+#=========================
+#Stop Loss Function
+#==========================
+def calculate_sl(price, signal, market):
+    volatility = random.uniform(0.002, 0.008)  # proxy volatility
 
+    if signal == "BUY":
+        sl = price * (1 - volatility)
+    elif signal == "SELL":
+        sl = price * (1 + volatility)
+    else:
+        sl = price
+
+    return round(sl, 2)
+    
+    def calculate_targets(price, signal):
+    if signal == "BUY":
+        return round(price * 1.01, 2), round(price * 1.02, 2)
+    elif signal == "SELL":
+        return round(price * 0.99, 2), round(price * 0.98, 2)
+    return price, price
 # =========================
 # MARKET DATA
 # =========================
@@ -200,6 +220,10 @@ def format_msg(index, signal, market, score, prob, pcr, maxp, flow, oi):
 📊 PCR: {pcr}
 🎯 Max Pain: {maxp}
 
+🛑 Stop Loss: {sl}
+🎯 Target 1: {t1}
+🎯 Target 2: {t2}
+
 💰 Flow: {flow}
 📈 OI Pressure: {oi}
 
@@ -242,14 +266,17 @@ def run(index):
 
     st.write("📊 PCR:", pcr)
     st.write("🎯 Max Pain:", maxp)
-
+    
+    st.write("🛑 Stop Loss:", sl)
+    st.write("🎯 Target 1:", t1)
+    st.write("🎯 Target 2:", t2)
     st.success(flow)
 
     st.info(f"Options Strategy: {option_direction(signal)}")
 
     # ALERT SYSTEM
     if signal != "HOLD" and signal != st.session_state.last_signal[index]:
-        msg = format_msg(index, signal, market, score, prob, pcr, maxp, flow, oi)
+        msg = format_msg(index, signal, market, score, prob, pcr, maxp, flow, oi, sl, t1, t2)
         send_telegram(msg)
         st.success("🚨 Telegram Alert Sent")
         st.session_state.last_signal[index] = signal
