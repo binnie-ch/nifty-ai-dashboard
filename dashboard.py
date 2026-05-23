@@ -94,11 +94,15 @@ def send_telegram_alert(bot_token, chat_id, message):
 st.set_page_config(layout="wide")
 
 st.title("🤖 AI Nifty/Sensex Trading Dashboard")
+# Auto refresh every 30 seconds
+st_autorefresh(interval=30000, key="marketrefresh")
 
 symbol = st.selectbox(
     "Select Index",
     ["^NSEI", "^BSESN"]
 )
+
+from streamlit_autorefresh import st_autorefresh
 
 # Download Data
 data = yf.download(
@@ -185,7 +189,6 @@ AI Score: {score}
         )
 
     st.session_state.last_signal = signal
-
 # Chart
 fig = go.Figure(data=[go.Candlestick(
     x=data.index,
