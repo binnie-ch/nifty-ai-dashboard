@@ -136,6 +136,27 @@ data['VWAP'] = (
     / data['Volume'].cumsum()
 )
 
+from datetime import datetime
+import pytz
+
+# Indian market time
+india = pytz.timezone('Asia/Kolkata')
+now = datetime.now(india)
+
+# Market timings
+market_open = now.replace(hour=9, minute=15, second=0)
+market_close = now.replace(hour=15, minute=30, second=0)
+
+# Weekends
+if now.weekday() >= 5:
+    st.warning("📴 Market Closed (Weekend)")
+    st.stop()
+
+# Market hours check
+if now < market_open or now > market_close:
+    st.warning("📴 Market Closed")
+    st.stop()
+    
 # Generate Signal
 signal, score = generate_signal(data)
 
