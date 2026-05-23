@@ -6,3 +6,4 @@ requests
 pytz
 streamlit-autorefresh
 numpy
+holidays
