@@ -6,25 +6,32 @@ import plotly.graph_objects as go
 #from strategy import generate_signal
 def generate_signal(data):
 
-    latest = data.iloc[-1]
+    latest = data.iloc[-1].squeeze()
 
-    # Convert safely to float
-    ema9 = float(latest['EMA9'])
-    ema21 = float(latest['EMA21'])
-    rsi = float(latest['RSI'])
-    close = float(latest['Close'])
-    vwap = float(latest['VWAP'])
-    volume = float(latest['Volume'])
+    ema9 = latest.get('EMA9', 0)
+    ema21 = latest.get('EMA21', 0)
+    rsi = latest.get('RSI', 0)
+    close = latest.get('Close', 0)
+    vwap = latest.get('VWAP', 0)
+    volume = latest.get('Volume', 0)
+
+    # Convert safely
+    ema9 = float(ema9)
+    ema21 = float(ema21)
+    rsi = float(rsi)
+    close = float(close)
+    vwap = float(vwap)
+    volume = float(volume)
 
     score = 0
 
-    # EMA Trend
+    # EMA
     if ema9 > ema21:
         score += 30
     else:
         score -= 30
 
-    # RSI Strength
+    # RSI
     if rsi > 60:
         score += 25
     elif rsi < 40:
@@ -42,7 +49,7 @@ def generate_signal(data):
     if volume > avg_volume:
         score += 15
 
-    # Final Decision
+    # Final Signal
     if score >= 50:
         return "BUY CE 🚀", score
 
@@ -51,7 +58,6 @@ def generate_signal(data):
 
     else:
         return "NO TRADE", score
-        
 #from bot import send_telegram_alert
 import requests
 
