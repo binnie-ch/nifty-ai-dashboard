@@ -3,21 +3,67 @@ import numpy as np
 import random
 import time
 import requests
+import holidays
+from datetime import datetime
+import pytz
 
-# -----------------------------
+# =========================
 # TELEGRAM CONFIG
-# -----------------------------
-BOT_TOKEN = "8568497873:AAHEXglTw7nowIhX27AmPnKCs24ku6lF6gc"
-CHAT_ID = "8540013665"
+# =========================
+BOT_TOKEN = "YOUR_BOT_TOKEN"
+CHAT_ID = "YOUR_CHAT_ID"
+
 
 def send_telegram(msg):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
+    try:
+        requests.post(url, data={"chat_id": CHAT_ID, "text": msg}, timeout=10)
+    except:
+        pass
 
 
-# -----------------------------
+# =========================
+# DYNAMIC HOLIDAY CHECK
+# =========================
+def is_holiday():
+    india_holidays = holidays.India()
+    today = datetime.now().date()
+    return today in india_holidays
+
+
+def holiday_name():
+    india_holidays = holidays.India()
+    today = datetime.now().date()
+    return india_holidays.get(today, None)
+
+
+# =========================
+# MARKET HOURS CHECK
+# =========================
+def is_market_open():
+    india = pytz.timezone("Asia/Kolkata")
+    now = datetime.now(india)
+
+    if now.weekday() >= 5:
+        return False
+
+    start = now.replace(hour=9, minute=15, second=0)
+    end = now.replace(hour=15, minute=30, second=0)
+
+    return start <= now <= end
+
+
+def market_status():
+    if is_holiday():
+        return False, f"⛔ NSE Holiday: {holiday_name()}"
+    if not is_market_open():
+        return False, "⛔ Market Closed (Time Filter)"
+    return True, "✅ Market Active"
+
+
+# =========================
 # MARKET DATA
-# -----------------------------
+# =========================
 def get_market(index):
     price = random.uniform(22000, 26000) if index == "NIFTY50" else random.uniform(70000, 80000)
 
@@ -29,167 +75,146 @@ def get_market(index):
     }
 
 
-# -----------------------------
-# OPTION CHAIN
-# -----------------------------
+# =========================
+# OPTION CHAIN DATA
+# =========================
 def get_option_chain(price):
     chain = []
 
     for i in range(-10, 11):
         strike = price + i * 100
 
-        call_oi = random.randint(5000, 60000)
-        put_oi = random.randint(5000, 60000)
-
-        call_change = random.randint(-8000, 8000)
-        put_change = random.randint(-8000, 8000)
-
         chain.append({
             "strike": strike,
-            "call_oi": call_oi,
-            "put_oi": put_oi,
-            "call_change": call_change,
-            "put_change": put_change
+            "call_oi": random.randint(5000, 60000),
+            "put_oi": random.randint(5000, 60000),
+            "call_change": random.randint(-8000, 8000),
+            "put_change": random.randint(-8000, 8000),
         })
 
     return chain
 
 
-# -----------------------------
-# MAX PAIN
-# -----------------------------
-def max_pain(chain):
-    pain = []
-
-    for c in chain:
-        cp = c["call_oi"] * max(0, c["strike"] - c["strike"])
-        pp = c["put_oi"] * max(0, c["strike"] - c["strike"])
-        pain.append((c["strike"], cp + pp))
-
-    return min(pain, key=lambda x: x[1])[0]
-
-
-# -----------------------------
-# PCR
-# -----------------------------
-def pcr(chain):
+# =========================
+# PCR CALCULATION
+# =========================
+def calculate_pcr(chain):
     call = sum(x["call_oi"] for x in chain)
     put = sum(x["put_oi"] for x in chain)
     return round(put / call, 2)
 
 
-# -----------------------------
-# SMART MONEY FLOW DETECTION
-# -----------------------------
-def smart_money_flow(chain, market):
-    total_call_change = sum(x["call_change"] for x in chain)
-    total_put_change = sum(x["put_change"] for x in chain)
+# =========================
+# MAX PAIN
+# =========================
+def max_pain(chain):
+    return min(chain, key=lambda x: x["call_oi"] + x["put_oi"])["strike"]
 
-    oi_pressure = total_call_change - total_put_change
 
-    # Whale activity detection
-    whale_spike = any(abs(x["call_change"]) > 5000 or abs(x["put_change"]) > 5000 for x in chain)
+# =========================
+# SMART MONEY FLOW
+# =========================
+def smart_money(chain, market):
+    call_flow = sum(x["call_change"] for x in chain)
+    put_flow = sum(x["put_change"] for x in chain)
 
-    # Volume confirmation
-    volume_strength = market["volume"] > 500000
+    oi_pressure = call_flow - put_flow
 
-    # Flow classification
-    if oi_pressure > 15000 and volume_strength:
-        flow = "🚀 STRONG INSTITUTIONAL BUYING"
-        bias = 25
-    elif oi_pressure < -15000 and volume_strength:
-        flow = "📉 STRONG DISTRIBUTION (SELLING)"
-        bias = -25
-    elif whale_spike:
-        flow = "🐳 WHALE ACTIVITY DETECTED"
-        bias = 10
+    whale = any(abs(x["call_change"]) > 5000 or abs(x["put_change"]) > 5000 for x in chain)
+
+    if oi_pressure > 15000 and market["volume"] > 500000:
+        return "🚀 INSTITUTIONAL BUYING", 25, oi_pressure
+    elif oi_pressure < -15000 and market["volume"] > 500000:
+        return "📉 INSTITUTIONAL SELLING", -25, oi_pressure
+    elif whale:
+        return "🐳 WHALE ACTIVITY DETECTED", 10, oi_pressure
     else:
-        flow = "⚖️ NEUTRAL / MIXED FLOW"
-        bias = 0
-
-    return flow, bias, oi_pressure, whale_spike
+        return "⚖️ NEUTRAL FLOW", 0, oi_pressure
 
 
-# -----------------------------
-# AI ENGINE
-# -----------------------------
-def ai_engine(market, chain):
-    pcr_val = pcr(chain)
-    max_pain_val = max_pain(chain)
-
-    flow, flow_bias, oi_pressure, whale = smart_money_flow(chain, market)
-
-    score = 0
-
-    # RSI logic
-    if market["rsi"] < 30:
-        score += 20
-    elif market["rsi"] > 70:
-        score -= 20
-
-    # ORB logic
-    if market["orb"] == "Breakout Up":
-        score += 15
-    elif market["orb"] == "Breakout Down":
-        score -= 15
-
-    # PCR logic
-    if pcr_val < 0.8:
-        score += 15
-    elif pcr_val > 1.2:
-        score -= 15
-
-    # Smart money flow
-    score += flow_bias
-
-    signal = "BUY" if score > 20 else "SELL" if score < -20 else "HOLD"
-    direction = option_direction(signal)
-    win_prob = min(95, max(50, 50 + abs(score)))
-
-    return signal, score, win_prob, pcr_val, max_pain_val, flow, oi_pressure
-
+# =========================
+# CE / PE MAPPING
+# =========================
 def option_direction(signal):
     if signal == "BUY":
         return "CE (CALL BUY)"
     elif signal == "SELL":
         return "PE (PUT BUY)"
-    else:
-        return "NO TRADE"
-        
-# -----------------------------
+    return "NO TRADE"
+
+
+# =========================
+# AI ENGINE
+# =========================
+def ai_engine(market, chain):
+    pcr = calculate_pcr(chain)
+    maxp = max_pain(chain)
+
+    flow, bias, oi = smart_money(chain, market)
+
+    score = 0
+
+    # RSI
+    if market["rsi"] < 30:
+        score += 20
+    elif market["rsi"] > 70:
+        score -= 20
+
+    # ORB
+    if market["orb"] == "Breakout Up":
+        score += 15
+    elif market["orb"] == "Breakout Down":
+        score -= 15
+
+    # PCR
+    if pcr < 0.8:
+        score += 15
+    elif pcr > 1.2:
+        score -= 15
+
+    # Smart money
+    score += bias
+
+    signal = "BUY" if score > 20 else "SELL" if score < -20 else "HOLD"
+    prob = min(95, max(50, 50 + abs(score)))
+
+    return signal, score, prob, pcr, maxp, flow, oi
+
+
+# =========================
 # TELEGRAM MESSAGE
-# -----------------------------
-def format_msg(index, signal, market, score, prob, pcr_val, max_pain_val, flow, oi_pressure):
+# =========================
+def format_msg(index, signal, market, score, prob, pcr, maxp, flow, oi):
     direction = option_direction(signal)
 
     return f"""
 🚨 AI {index} SMART MONEY SIGNAL
 
 📊 Signal: {signal}
-📌 Options Action: {direction}
+📌 Options: {direction}
 
 📊 Price: {round(market['price'],2)}
 
 🧠 AI Score: {score}
 🎯 Win Probability: {prob}%
 
-📊 PCR: {pcr_val}
-🎯 Max Pain: {max_pain_val}
+📊 PCR: {pcr}
+🎯 Max Pain: {maxp}
 
-💰 Smart Money Flow:
-{flow}
-
-📈 OI Pressure: {oi_pressure}
+💰 Flow: {flow}
+📈 OI Pressure: {oi}
 
 📉 RSI: {market['rsi']}
 🚀 ORB: {market['orb']}
+
+⚡ Dynamic Holiday + Smart Money System
 """
 
 
-# -----------------------------
+# =========================
 # STREAMLIT UI
-# -----------------------------
-st.title("📊 SMART MONEY AI TRADING DASHBOARD")
+# =========================
+st.title("📊 SMART MONEY AI TRADING DASHBOARD (PRO)")
 
 tab1, tab2 = st.tabs(["📈 NIFTY50", "📊 SENSEX"])
 
@@ -198,10 +223,17 @@ if "last_signal" not in st.session_state:
 
 
 def run(index):
+    allowed, status = market_status()
+    st.info(status)
+
+    if not allowed:
+        st.warning("🚫 No alerts - Market Closed / Holiday")
+        return
+
     market = get_market(index)
     chain = get_option_chain(market["price"])
 
-    signal, score, prob, pcr_val, max_pain_val, flow, oi_pressure = ai_engine(market, chain)
+    signal, score, prob, pcr, maxp, flow, oi = ai_engine(market, chain)
 
     st.subheader(f"{index} → {signal}")
 
@@ -209,17 +241,18 @@ def run(index):
     st.metric("AI Score", score)
     st.metric("Win Probability", f"{prob}%")
 
-    st.write("📊 PCR:", pcr_val)
-    st.write("🎯 Max Pain:", max_pain_val)
+    st.write("📊 PCR:", pcr)
+    st.write("🎯 Max Pain:", maxp)
 
     st.success(flow)
-    st.success(f"Options Signal: {option_direction(signal)}")
+
+    st.info(f"Options Strategy: {option_direction(signal)}")
 
     # ALERT SYSTEM
     if signal != "HOLD" and signal != st.session_state.last_signal[index]:
-        msg = format_msg(index, signal, market, score, prob, pcr_val, max_pain_val, flow, oi_pressure)
+        msg = format_msg(index, signal, market, score, prob, pcr, maxp, flow, oi)
         send_telegram(msg)
-        st.warning("🚨 Telegram Alert Sent!")
+        st.success("🚨 Telegram Alert Sent")
         st.session_state.last_signal[index] = signal
 
 
@@ -228,5 +261,7 @@ with tab1:
 
 with tab2:
     run("SENSEX")
+
+
 time.sleep(60)
 st.rerun()
