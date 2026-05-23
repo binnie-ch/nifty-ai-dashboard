@@ -43,7 +43,18 @@ def generate_signal(data):
 
     else:
         return "NO TRADE", score
-from bot import send_telegram_alert
+        
+#from bot import send_telegram_alert
+import requests
+
+def send_telegram_alert(bot_token, chat_id, message):
+
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+
+    requests.get(url, params={
+        "chat_id": chat_id,
+        "text": message
+    })
 
 st.set_page_config(layout="wide")
 
