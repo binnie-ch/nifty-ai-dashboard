@@ -8,33 +8,41 @@ def generate_signal(data):
 
     latest = data.iloc[-1]
 
+    # Convert safely to float
+    ema9 = float(latest['EMA9'])
+    ema21 = float(latest['EMA21'])
+    rsi = float(latest['RSI'])
+    close = float(latest['Close'])
+    vwap = float(latest['VWAP'])
+    volume = float(latest['Volume'])
+
     score = 0
 
     # EMA Trend
-    if latest['EMA9'] > latest['EMA21']:
+    if ema9 > ema21:
         score += 30
     else:
         score -= 30
 
     # RSI Strength
-    if latest['RSI'] > 60:
+    if rsi > 60:
         score += 25
-    elif latest['RSI'] < 40:
+    elif rsi < 40:
         score -= 25
 
     # VWAP
-    if latest['Close'] > latest['VWAP']:
+    if close > vwap:
         score += 20
     else:
         score -= 20
 
-    # Volume Check
-    avg_volume = data['Volume'].tail(10).mean()
+    # Volume
+    avg_volume = float(data['Volume'].tail(10).mean())
 
-    if latest['Volume'] > avg_volume:
+    if volume > avg_volume:
         score += 15
 
-    # Final Signal
+    # Final Decision
     if score >= 50:
         return "BUY CE 🚀", score
 
