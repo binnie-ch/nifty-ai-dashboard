@@ -131,7 +131,7 @@ def smart_money(chain, market):
 
 #=========================
 #Stop Loss Function
-#==========================
+#=========================
 def calculate_sl(price, signal, market):
     volatility = random.uniform(0.002, 0.008)  # proxy volatility
 
@@ -145,16 +145,15 @@ def calculate_sl(price, signal, market):
         sl = price
 
     return round(sl, 2)
-#===≈==================
+#======================
 #Target Calculation
 #======================
-    def calculate_targets(price, signal):
+def calculate_targets(price, signal):
     if signal == "BUY":
         return round(price * 1.01, 2), round(price * 1.02, 2)
     elif signal == "SELL":
         return round(price * 0.99, 2), round(price * 0.98, 2)
     return price, price
-    
 # =========================
 # CE / PE MAPPING
 # =========================
