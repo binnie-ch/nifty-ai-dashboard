@@ -3,7 +3,46 @@ import pandas as pd
 import yfinance as yf
 import plotly.graph_objects as go
 
-from strategy import generate_signal
+#from strategy import generate_signal
+def generate_signal(data):
+
+    latest = data.iloc[-1]
+
+    score = 0
+
+    # EMA Trend
+    if latest['EMA9'] > latest['EMA21']:
+        score += 30
+    else:
+        score -= 30
+
+    # RSI Strength
+    if latest['RSI'] > 60:
+        score += 25
+    elif latest['RSI'] < 40:
+        score -= 25
+
+    # VWAP
+    if latest['Close'] > latest['VWAP']:
+        score += 20
+    else:
+        score -= 20
+
+    # Volume Check
+    avg_volume = data['Volume'].tail(10).mean()
+
+    if latest['Volume'] > avg_volume:
+        score += 15
+
+    # Final Signal
+    if score >= 50:
+        return "BUY CE 🚀", score
+
+    elif score <= -50:
+        return "BUY PE 🔻", score
+
+    else:
+        return "NO TRADE", score
 from bot import send_telegram_alert
 
 st.set_page_config(layout="wide")
