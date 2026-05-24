@@ -1,9 +1,9 @@
 streamlit
-yfinance
-pandas
 plotly
 requests
 pytz
 streamlit-autorefresh
-numpy
 holidays
+numpy
+pandas
+python-telegram-bot==20.7
