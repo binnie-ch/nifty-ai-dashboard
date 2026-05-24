@@ -104,7 +104,76 @@ def get_option_chain(price):
 
     return chain
 
+# =========================
+# CE / PE BUILDUP SCANNER
+# =========================
+def buildup_scanner(chain, market_price):
 
+    buildup_data = []
+
+    for row in chain:
+
+        strike = row["strike"]
+
+        call_change = row["call_change"]
+        put_change = row["put_change"]
+
+        # Simulated premium movement
+        ce_price_move = random.uniform(-5, 5)
+        pe_price_move = random.uniform(-5, 5)
+
+        # CE LOGIC
+        if ce_price_move > 0 and call_change > 0:
+            ce_signal = "🟢 CE LONG BUILDUP"
+
+        elif ce_price_move < 0 and call_change > 0:
+            ce_signal = "🔴 CE SHORT BUILDUP"
+
+        elif ce_price_move > 0 and call_change < 0:
+            ce_signal = "🚀 CE SHORT COVERING"
+
+        else:
+            ce_signal = "⚠️ CE LONG UNWINDING"
+
+        # PE LOGIC
+        if pe_price_move > 0 and put_change > 0:
+            pe_signal = "🟢 PE LONG BUILDUP"
+
+        elif pe_price_move < 0 and put_change > 0:
+            pe_signal = "🔴 PE SHORT BUILDUP"
+
+        elif pe_price_move > 0 and put_change < 0:
+            pe_signal = "🚀 PE SHORT COVERING"
+
+        else:
+            pe_signal = "⚠️ PE LONG UNWINDING"
+
+        buildup_data.append({
+            "strike": strike,
+            "ce_signal": ce_signal,
+            "pe_signal": pe_signal,
+            "call_change": call_change,
+            "put_change": put_change
+        })
+
+    return buildup_data
+    # =========================
+# ATM STRIKE
+# =========================
+def atm_strike(price):
+
+    return round(price / 100) * 100
+    # =========================
+# STRONGEST BUILDUP
+# =========================
+def strongest_buildup(buildup_data):
+
+    strongest = max(
+        buildup_data,
+        key=lambda x: abs(x["call_change"]) + abs(x["put_change"])
+    )
+
+    return strongest
 # =========================
 # PCR CALCULATION
 # =========================
@@ -239,6 +308,14 @@ def format_msg(index, signal, market, score, prob, pcr, maxp, flow, oi):
 🎯 Target 1: {t1}
 🎯 Target 2: {t2}
 
+🎯 ATM Strike: {atm}
+
+📊 BUILDUP ANALYSIS
+CE: {strong['ce_signal']}
+PE: {strong['pe_signal']}
+
+🔥 Active Strike: {strong['strike']}
+
 💰 Flow: {flow}
 📈 OI Pressure: {oi}
 
@@ -274,6 +351,14 @@ def run(index):
 
     market = get_market(index)
     chain = get_option_chain(market["price"])
+    # Build-up scanner
+    buildup = buildup_scanner(chain, market["price"])
+
+    # Strongest strike
+    strong = strongest_buildup(buildup)
+
+    # ATM strike
+    atm = atm_strike(market["price"])
 
     signal, score, prob, pcr, maxp, flow, oi = ai_engine(market, chain)
 
@@ -289,13 +374,25 @@ def run(index):
     st.write("🛑 Stop Loss:", sl)
     st.write("🎯 Target 1:", t1)
     st.write("🎯 Target 2:", t2)
+    st.subheader("📊 CE / PE BUILDUP SCANNER")
+
+    st.write(f"🎯 ATM Strike: {atm}")
+
+    st.success(f"""
+    Strongest Activity Strike: {strong['strike']}
+    """)
+
+    st.info(f"""
+    CE: {strong['ce_signal']}
+    PE: {strong['pe_signal']}
+    """)
     st.success(flow)
 
     st.info(f"Options Strategy: {option_direction(signal)}")
 
     # ALERT SYSTEM
     if signal != "HOLD" and signal != st.session_state.last_signal[index]:
-        msg = format_msg(index, signal, market, score, prob, pcr, maxp, flow, oi, sl, t1, t2)
+    msg = format_msg(index,signal,market,score,prob,pcr,maxp,flow,oi,sl,t1,t2,atm,strong)
         send_telegram(msg)
         st.success("🚨 Telegram Alert Sent")
         st.session_state.last_signal[index] = signal
