@@ -2,8 +2,6 @@ import requests
 import time
 import numpy as np
 import logging
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
 
 # =========================
 # CONFIG
