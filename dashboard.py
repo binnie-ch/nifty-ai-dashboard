@@ -10,19 +10,18 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 # =========================
 BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
 
-logging.basicConfig(level=logging.INFO)
-
 session = requests.Session()
 session.headers.update({
     "User-Agent": "Mozilla/5.0",
-    "Accept-Language": "en-US,en;q=0.9",
     "referer": "https://www.nseindia.com"
 })
 
+logging.basicConfig(level=logging.INFO)
+
 # =========================
-# LIVE NSE API
+# NSE LIVE DATA
 # =========================
-def get_option_chain(symbol):
+def get_chain(symbol):
     url = f"https://www.nseindia.com/api/option-chain-indices?symbol={symbol}"
     try:
         session.get("https://www.nseindia.com", timeout=5)
@@ -33,18 +32,18 @@ def get_option_chain(symbol):
 
 
 # =========================
-# LIVE FEATURE ENGINE
+# EXTRACT LIVE DATA
 # =========================
-def extract_features(data):
+def extract(data):
     records = data["records"]["data"]
 
-    call_oi = 0
-    put_oi = 0
-    ce_change = 0
-    pe_change = 0
-    iv = []
+    ce_oi = 0
+    pe_oi = 0
+    ce_chg = 0
+    pe_chg = 0
+    ivs = []
 
-    strike_oi_map = {}
+    strike_map = {}
 
     for i in records:
         ce = i.get("CE", {})
@@ -52,64 +51,74 @@ def extract_features(data):
 
         strike = i["strikePrice"]
 
-        ce_oi = ce.get("openInterest", 0)
-        pe_oi = pe.get("openInterest", 0)
+        ce_oi += ce.get("openInterest", 0)
+        pe_oi += pe.get("openInterest", 0)
 
-        ce_chg = ce.get("changeinOpenInterest", 0)
-        pe_chg = pe.get("changeinOpenInterest", 0)
-
-        call_oi += ce_oi
-        put_oi += pe_oi
-        ce_change += ce_chg
-        pe_change += pe_chg
+        ce_chg += ce.get("changeinOpenInterest", 0)
+        pe_chg += pe.get("changeinOpenInterest", 0)
 
         if "impliedVolatility" in ce:
-            iv.append(ce["impliedVolatility"])
+            ivs.append(ce["impliedVolatility"])
         if "impliedVolatility" in pe:
-            iv.append(pe["impliedVolatility"])
+            ivs.append(pe["impliedVolatility"])
 
-        strike_oi_map[strike] = ce_oi + pe_oi
+        strike_map[strike] = {
+            "CE_LTP": ce.get("lastPrice", 0),
+            "PE_LTP": pe.get("lastPrice", 0),
+            "CE_OI": ce.get("openInterest", 0),
+            "PE_OI": pe.get("openInterest", 0),
+        }
 
-    pcr = put_oi / call_oi if call_oi else 0
-    iv_avg = np.mean(iv) if iv else 0
-
-    max_pain = min(strike_oi_map, key=strike_oi_map.get)
+    pcr = pe_oi / ce_oi if ce_oi else 0
+    iv = np.mean(ivs) if ivs else 0
 
     return {
         "pcr": pcr,
-        "iv": iv_avg,
-        "ce_change": ce_change,
-        "pe_change": pe_change,
-        "max_pain": max_pain,
-        "strike_map": strike_oi_map
+        "iv": iv,
+        "ce_chg": ce_chg,
+        "pe_chg": pe_chg,
+        "strike_map": strike_map
     }
 
 
 # =========================
-# STRIKE SELECTION ENGINE
+# STRIKE SELECTION
 # =========================
-def get_best_strike(strike_map, ltp):
+def best_strike(strike_map, ltp):
     atm = round(ltp / 50) * 50
 
-    nearby = sorted(strike_map.items(), key=lambda x: abs(x[0] - atm))
+    nearest = sorted(strike_map.keys(), key=lambda x: abs(x - atm))[:5]
 
     return {
         "ATM": atm,
-        "CALL": atm + 50,
-        "PUT": atm - 50
+        "CALL_STRIKE": atm + 50,
+        "PUT_STRIKE": atm - 50,
+        "NEARBY": nearest
     }
 
 
 # =========================
 # SMART MONEY FLOW
 # =========================
-def smart_money(f):
-    if f["ce_change"] > f["pe_change"] * 1.2:
-        return "🟢 SMART MONEY: CALL BUILDUP"
-    elif f["pe_change"] > f["ce_change"] * 1.2:
-        return "🔴 SMART MONEY: PUT BUILDUP"
+def smart_flow(f):
+    if f["ce_chg"] > f["pe_chg"] * 1.2:
+        return "🟢 CALL BUILDUP (SMART MONEY BUYING CALLS)"
+    elif f["pe_chg"] > f["ce_chg"] * 1.2:
+        return "🔴 PUT BUILDUP (SMART MONEY BUYING PUTS)"
     else:
         return "🟡 NEUTRAL FLOW"
+
+
+# =========================
+# ENTRY / EXIT ENGINE
+# =========================
+def entry_exit(score, atm):
+    if score >= 70:
+        return f"ENTRY: ATM CALL ({atm}) | EXIT: +100 pts / Max Pain"
+    elif score <= 30:
+        return f"ENTRY: ATM PUT ({atm}) | EXIT: +100 pts / Max Pain"
+    else:
+        return "NO TRADE ZONE"
 
 
 # =========================
@@ -118,70 +127,85 @@ def smart_money(f):
 def signal_engine(f):
     score = 50
 
+    # PCR
     if f["pcr"] > 1.3:
         score += 20
     elif f["pcr"] < 0.8:
         score -= 20
 
-    if f["ce_change"] > f["pe_change"]:
+    # OI pressure
+    if f["ce_chg"] > f["pe_chg"]:
         score += 10
     else:
         score -= 10
 
+    # IV filter
     if f["iv"] > 18:
         score -= 5
 
-    if f["max_pain"]:
-        score += 0  # anchor zone
-
     score = max(0, min(100, score))
 
-    if score >= 65:
+    if score >= 70:
         signal = "🟢 BUY CALL"
-        entry = "ATM CALL"
-        exit_ = "MAX PAIN ZONE"
-    elif score <= 35:
+    elif score <= 30:
         signal = "🔴 BUY PUT"
-        entry = "ATM PUT"
-        exit_ = "MAX PAIN ZONE"
     else:
         signal = "🟡 NO TRADE"
-        entry = "-"
-        exit_ = "-"
 
-    return score, signal, entry, exit_
+    return score, signal
 
 
 # =========================
-# PREMIUM MESSAGE
+# FORMAT MESSAGE
 # =========================
-def format_msg(symbol, f, strike, score, signal, entry, exit_, sm):
+def format_msg(symbol, f, strikes, score, signal, sm, entry_exit_text):
     return f"""
-📊 {symbol} LIVE PREMIUM SIGNAL
+📊 {symbol} LIVE CE/PE ANALYSIS
 
-━━━━━━━━━━━━━━
-📌 PCR: {round(f['pcr'], 2)}
-⚡ IV: {round(f['iv'], 2)}
-🎯 Max Pain: {f['max_pain']}
+✔ NSE DATA: LIVE
+✔ NO ML SYSTEM
 
-📈 Entry: {entry}
-🎯 Exit: {exit_}
+-------------------------
+📌 PCR: {round(f['pcr'],2)}
+⚡ IV: {round(f['iv'],2)}
 
-💰 Strike Suggestion:
-CALL: {strike['CALL']}
-PUT: {strike['PUT']}
-ATM: {strike['ATM']}
+📈 CE Pressure: {f['ce_chg']}
+📉 PE Pressure: {f['pe_chg']}
 
-🧠 Score: {score}/100
-🚨 Signal: {signal}
+🎯 STRIKES:
+ATM: {strikes['ATM']}
+CALL: {strikes['CALL_STRIKE']}
+PUT: {strikes['PUT_STRIKE']}
 
-🔥 Smart Money:
+🧠 SCORE: {score}/100
+🚨 SIGNAL: {signal}
+
+🔥 SMART MONEY:
 {sm}
 
-━━━━━━━━━━━━━━
-✔ NSE LIVE DATA ONLY
-✔ NO ML / NO SIMULATION
+📍 TRADE PLAN:
+{entry_exit_text}
+
+-------------------------
+⏱ LIVE UPDATE ENGINE (60s INTERNAL)
 """
+
+
+# =========================
+# PROCESS ENGINE
+# =========================
+def process(symbol, ltp):
+    data = get_chain(symbol)
+    if not data:
+        return None
+
+    f = extract(data)
+    strikes = best_strike(f["strike_map"], ltp)
+    score, signal = signal_engine(f)
+    sm = smart_flow(f)
+    entry_exit_text = entry_exit(score, strikes["ATM"])
+
+    return format_msg(symbol, f, strikes, score, signal, sm, entry_exit_text)
 
 
 # =========================
@@ -189,60 +213,24 @@ ATM: {strike['ATM']}
 # =========================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🚀 PREMIUM NSE BOT READY\n\n"
-        "/nifty\n/banknifty\n/sensex\n/live"
+        "🚀 LIVE NSE CE/PE BOT READY\n\n"
+        "/nifty\n/banknifty\n/sensex"
     )
-
-
-def process(symbol, ltp):
-    data = get_option_chain(symbol)
-    if not data:
-        return None
-
-    f = extract_features(data)
-    strike = get_best_strike(f["strike_map"], ltp)
-    score, signal, entry, exit_ = signal_engine(f)
-    sm = smart_money(f)
-
-    msg = format_msg(symbol, f, strike, score, signal, entry, exit_, sm)
-
-    return msg
 
 
 async def nifty(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = process("NIFTY", 25000)
-    await update.message.reply_text(msg or "Error")
+    await update.message.reply_text(msg or "Error fetching data")
 
 
 async def banknifty(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = process("BANKNIFTY", 52000)
-    await update.message.reply_text(msg or "Error")
+    await update.message.reply_text(msg or "Error fetching data")
 
 
 async def sensex(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = process("NIFTY", 75000)  # NSE proxy behavior
-    await update.message.reply_text(msg or "Error")
-
-
-# =========================
-# AUTO ALERT ENGINE (2 MIN)
-# =========================
-def auto_alert(app):
-    while True:
-        try:
-            msg = process("NIFTY", 25000)
-            if msg:
-                app.bot.send_message(chat_id=YOUR_CHAT_ID, text=msg)
-
-            msg2 = process("BANKNIFTY", 52000)
-            if msg2:
-                app.bot.send_message(chat_id=YOUR_CHAT_ID, text=msg2)
-
-            time.sleep(120)  # 2 minutes
-
-        except Exception as e:
-            print("Alert error:", e)
-            time.sleep(120)
+    msg = process("NIFTY", 75000)
+    await update.message.reply_text(msg or "Error fetching data")
 
 
 # =========================
@@ -256,12 +244,7 @@ def main():
     app.add_handler(CommandHandler("banknifty", banknifty))
     app.add_handler(CommandHandler("sensex", sensex))
 
-    print("🚀 PREMIUM LIVE BOT RUNNING...")
-
-    # NOTE: Auto-alert runs separately (thread recommended in production)
-    # import threading
-    # threading.Thread(target=auto_alert, args=(app,), daemon=True).start()
-
+    print("🚀 CE/PE LIVE BOT RUNNING (NO ML, REAL NSE DATA)")
     app.run_polling()
 
 
