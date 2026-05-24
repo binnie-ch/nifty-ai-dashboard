@@ -392,7 +392,7 @@ def run(index):
 
     # ALERT SYSTEM
     if signal != "HOLD" and signal != st.session_state.last_signal[index]:
-    msg = format_msg(index,signal,market,score,prob,pcr,maxp,flow,oi,sl,t1,t2,atm,strong)
+        msg = format_msg(index,signal,market,score,prob,pcr,maxp,flow,oi,sl,t1,t2,atm,strong)
         send_telegram(msg)
         st.success("🚨 Telegram Alert Sent")
         st.session_state.last_signal[index] = signal
