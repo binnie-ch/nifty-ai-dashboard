@@ -5,7 +5,7 @@ from streamlit_autorefresh import st_autorefresh
 # =========================
 # AUTO REFRESH
 # =========================
-st_autorefresh(interval=10000, key="refresh")
+st_autorefresh(interval=600000, key="refresh")
 
 # =========================
 # CONFIG
