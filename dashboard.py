@@ -1,250 +1,137 @@
+import streamlit as st
 import requests
-import time
-import numpy as np
-import logging
+from streamlit_autorefresh import st_autorefresh
+
+# =========================
+# AUTO REFRESH (10 sec)
+# =========================
+st_autorefresh(interval=10000, key="refresh")
 
 # =========================
 # CONFIG
 # =========================
-BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
+st.set_page_config(page_title="PE/CE AI Live System", layout="wide")
 
-session = requests.Session()
-session.headers.update({
+st.title("📊 LIVE PE / CE AI TRADING SYSTEM (INDIA)")
+
+# =========================
+# NSE OPTION CHAIN FETCH
+# =========================
+NSE_URL = "https://www.nseindia.com/api/option-chain-indices?symbol=NIFTY"
+
+headers = {
     "User-Agent": "Mozilla/5.0",
-    "referer": "https://www.nseindia.com"
-})
+    "Accept-Language": "en-US,en;q=0.9"
+}
 
-logging.basicConfig(level=logging.INFO)
-
-# =========================
-# NSE LIVE DATA
-# =========================
-def get_chain(symbol):
-    url = f"https://www.nseindia.com/api/option-chain-indices?symbol={symbol}"
+@st.cache_data(ttl=8)
+def fetch_option_chain():
     try:
-        session.get("https://www.nseindia.com", timeout=5)
-        r = session.get(url, timeout=10)
-        return r.json()
-    except:
-        return None
+        session = requests.Session()
+        session.get("https://www.nseindia.com", headers=headers, timeout=5)
+
+        response = session.get(NSE_URL, headers=headers, timeout=5)
+        data = response.json()
+
+        records = data["records"]["data"]
+
+        ce_oi = 0
+        pe_oi = 0
+
+        for r in records:
+            if "CE" in r:
+                ce_oi += r["CE"].get("openInterest", 0)
+            if "PE" in r:
+                pe_oi += r["PE"].get("openInterest", 0)
+
+        return ce_oi, pe_oi
+
+    except Exception:
+        return 0, 0
 
 
 # =========================
-# EXTRACT LIVE DATA
+# INDICATORS
 # =========================
-def extract(data):
-    records = data["records"]["data"]
+def calculate_pcr(ce_oi, pe_oi):
+    if ce_oi == 0:
+        return 0
+    return pe_oi / ce_oi
 
-    ce_oi = 0
-    pe_oi = 0
-    ce_chg = 0
-    pe_chg = 0
-    ivs = []
 
-    strike_map = {}
-
-    for i in records:
-        ce = i.get("CE", {})
-        pe = i.get("PE", {})
-
-        strike = i["strikePrice"]
-
-        ce_oi += ce.get("openInterest", 0)
-        pe_oi += pe.get("openInterest", 0)
-
-        ce_chg += ce.get("changeinOpenInterest", 0)
-        pe_chg += pe.get("changeinOpenInterest", 0)
-
-        if "impliedVolatility" in ce:
-            ivs.append(ce["impliedVolatility"])
-        if "impliedVolatility" in pe:
-            ivs.append(pe["impliedVolatility"])
-
-        strike_map[strike] = {
-            "CE_LTP": ce.get("lastPrice", 0),
-            "PE_LTP": pe.get("lastPrice", 0),
-            "CE_OI": ce.get("openInterest", 0),
-            "PE_OI": pe.get("openInterest", 0),
-        }
-
-    pcr = pe_oi / ce_oi if ce_oi else 0
-    iv = np.mean(ivs) if ivs else 0
-
-    return {
-        "pcr": pcr,
-        "iv": iv,
-        "ce_chg": ce_chg,
-        "pe_chg": pe_chg,
-        "strike_map": strike_map
-    }
+def detect_trend_mock():
+    # Replace later with EMA / yfinance / broker data
+    return "UP"
 
 
 # =========================
-# STRIKE SELECTION
+# AI ENGINE
 # =========================
-def best_strike(strike_map, ltp):
-    atm = round(ltp / 50) * 50
+def ai_signal(pcr, ce_oi, pe_oi, trend):
 
-    nearest = sorted(strike_map.keys(), key=lambda x: abs(x - atm))[:5]
+    score = 0
 
-    return {
-        "ATM": atm,
-        "CALL_STRIKE": atm + 50,
-        "PUT_STRIKE": atm - 50,
-        "NEARBY": nearest
-    }
+    # PCR logic
+    if pcr > 1.2:
+        score += 30
+    elif pcr < 0.8:
+        score -= 30
 
-
-# =========================
-# SMART MONEY FLOW
-# =========================
-def smart_flow(f):
-    if f["ce_chg"] > f["pe_chg"] * 1.2:
-        return "🟢 CALL BUILDUP (SMART MONEY BUYING CALLS)"
-    elif f["pe_chg"] > f["ce_chg"] * 1.2:
-        return "🔴 PUT BUILDUP (SMART MONEY BUYING PUTS)"
-    else:
-        return "🟡 NEUTRAL FLOW"
-
-
-# =========================
-# ENTRY / EXIT ENGINE
-# =========================
-def entry_exit(score, atm):
-    if score >= 70:
-        return f"ENTRY: ATM CALL ({atm}) | EXIT: +100 pts / Max Pain"
-    elif score <= 30:
-        return f"ENTRY: ATM PUT ({atm}) | EXIT: +100 pts / Max Pain"
-    else:
-        return "NO TRADE ZONE"
-
-
-# =========================
-# SIGNAL ENGINE (NO ML)
-# =========================
-def signal_engine(f):
-    score = 50
-
-    # PCR
-    if f["pcr"] > 1.3:
+    # OI logic
+    if pe_oi > ce_oi:
         score += 20
-    elif f["pcr"] < 0.8:
+    else:
         score -= 20
 
-    # OI pressure
-    if f["ce_chg"] > f["pe_chg"]:
-        score += 10
+    # Trend logic
+    if trend == "UP":
+        score += 25
     else:
-        score -= 10
+        score -= 25
 
-    # IV filter
-    if f["iv"] > 18:
-        score -= 5
-
-    score = max(0, min(100, score))
-
-    if score >= 70:
-        signal = "🟢 BUY CALL"
-    elif score <= 30:
-        signal = "🔴 BUY PUT"
+    if score > 40:
+        return "🟢 BUY CE (Bullish Market)", score
+    elif score < -40:
+        return "🔴 BUY PE (Bearish Market)", score
     else:
-        signal = "🟡 NO TRADE"
-
-    return score, signal
+        return "⚪ NO TRADE (Sideways Market)", score
 
 
 # =========================
-# FORMAT MESSAGE
+# LIVE DATA
 # =========================
-def format_msg(symbol, f, strikes, score, signal, sm, entry_exit_text):
-    return f"""
-📊 {symbol} LIVE CE/PE ANALYSIS
+ce_oi, pe_oi = fetch_option_chain()
+pcr = calculate_pcr(ce_oi, pe_oi)
+trend = detect_trend_mock()
 
-✔ NSE DATA: LIVE
-✔ NO ML SYSTEM
-
--------------------------
-📌 PCR: {round(f['pcr'],2)}
-⚡ IV: {round(f['iv'],2)}
-
-📈 CE Pressure: {f['ce_chg']}
-📉 PE Pressure: {f['pe_chg']}
-
-🎯 STRIKES:
-ATM: {strikes['ATM']}
-CALL: {strikes['CALL_STRIKE']}
-PUT: {strikes['PUT_STRIKE']}
-
-🧠 SCORE: {score}/100
-🚨 SIGNAL: {signal}
-
-🔥 SMART MONEY:
-{sm}
-
-📍 TRADE PLAN:
-{entry_exit_text}
-
--------------------------
-⏱ LIVE UPDATE ENGINE (60s INTERNAL)
-"""
+signal, score = ai_signal(pcr, ce_oi, pe_oi, trend)
 
 
 # =========================
-# PROCESS ENGINE
+# DASHBOARD UI
 # =========================
-def process(symbol, ltp):
-    data = get_chain(symbol)
-    if not data:
-        return None
+col1, col2, col3 = st.columns(3)
 
-    f = extract(data)
-    strikes = best_strike(f["strike_map"], ltp)
-    score, signal = signal_engine(f)
-    sm = smart_flow(f)
-    entry_exit_text = entry_exit(score, strikes["ATM"])
+col1.metric("📈 Call Open Interest", f"{ce_oi:,}")
+col2.metric("📉 Put Open Interest", f"{pe_oi:,}")
+col3.metric("⚖️ PCR Ratio", round(pcr, 2))
 
-    return format_msg(symbol, f, strikes, score, signal, sm, entry_exit_text)
+st.divider()
 
+st.subheader("🤖 AI Trading Signal Engine")
+st.markdown(f"## {signal}")
+st.write("📊 AI Score:", score)
 
-# =========================
-# TELEGRAM COMMANDS
-# =========================
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🚀 LIVE NSE CE/PE BOT READY\n\n"
-        "/nifty\n/banknifty\n/sensex"
-    )
-
-
-async def nifty(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = process("NIFTY", 25000)
-    await update.message.reply_text(msg or "Error fetching data")
-
-
-async def banknifty(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = process("BANKNIFTY", 52000)
-    await update.message.reply_text(msg or "Error fetching data")
-
-
-async def sensex(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = process("NIFTY", 75000)
-    await update.message.reply_text(msg or "Error fetching data")
-
+st.divider()
 
 # =========================
-# MAIN
+# MARKET INSIGHT PANEL
 # =========================
-def main():
-    app = Application.builder().token(BOT_TOKEN).build()
+if score > 40:
+    st.success("Market Bias: BULLISH → CE dominance detected")
+elif score < -40:
+    st.error("Market Bias: BEARISH → PE dominance detected")
+else:
+    st.warning("Market Bias: SIDEWAYS / RANGE BOUND")
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("nifty", nifty))
-    app.add_handler(CommandHandler("banknifty", banknifty))
-    app.add_handler(CommandHandler("sensex", sensex))
-
-    print("🚀 CE/PE LIVE BOT RUNNING (NO ML, REAL NSE DATA)")
-    app.run_polling()
-
-
-if __name__ == "__main__":
-    main()
+st.info("Auto-refresh every 10 seconds | NSE Option Chain Live Data")
