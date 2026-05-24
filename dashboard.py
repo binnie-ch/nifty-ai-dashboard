@@ -63,12 +63,24 @@ def market_status():
 # MARKET DATA
 # =========================
 def get_market(index):
-    price = random.uniform(22000, 26000) if index == "NIFTY50" else random.uniform(70000, 80000)
+
+    if index == "NIFTY50":
+        price = random.uniform(22000, 26000)
+
+    elif index == "BANKNIFTY":
+        price = random.uniform(48000, 58000)
+
+    else:  # SENSEX
+        price = random.uniform(70000, 80000)
 
     return {
         "price": price,
         "rsi": random.randint(20, 80),
-        "orb": random.choice(["Breakout Up", "Breakout Down", "No Breakout"]),
+        "orb": random.choice([
+            "Breakout Up",
+            "Breakout Down",
+            "No Breakout"
+        ]),
         "volume": random.randint(100000, 1000000),
     }
 
@@ -240,9 +252,13 @@ def format_msg(index, signal, market, score, prob, pcr, maxp, flow, oi):
 # =========================
 # STREAMLIT UI
 # =========================
-st.title("📊 SMART MONEY AI TRADING DASHBOARD (PRO)")
+st.title("📊 BINNY DASHBOARD (PRO)")
 
-tab1, tab2 = st.tabs(["📈 NIFTY50", "📊 SENSEX"])
+tab1, tab2, tab3 = st.tabs([
+    "📈 NIFTY50",
+    "🏦 BANKNIFTY",
+    "📊 SENSEX"
+])
 
 if "last_signal" not in st.session_state:
     st.session_state.last_signal = {"NIFTY50": None, "SENSEX": None}
@@ -289,6 +305,9 @@ with tab1:
     run("NIFTY50")
 
 with tab2:
+    run("BANKNIFTY")
+
+with tab3:
     run("SENSEX")
 
 
